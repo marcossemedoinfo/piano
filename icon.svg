@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a00e0"/>
+      <stop offset="50%" stop-color="#8e2de2"/>
+      <stop offset="100%" stop-color="#ff007f"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe600"/>
+      <stop offset="100%" stop-color="#ff9100"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)"/>
+
+  <!-- Glowing circle behind piano -->
+  <circle cx="256" cy="256" r="190" fill="#ffffff" fill-opacity="0.12"/>
+
+  <!-- Piano Body Base -->
+  <g filter="url(#shadow)">
+    <rect x="76" y="160" width="360" height="220" rx="28" fill="#1e1e2f"/>
+    <!-- Top colored banner of piano -->
+    <path d="M 76 188 C 76 172.5, 88.5 160, 104 160 L 408 160 C 423.5 160, 436 172.5, 436 188 L 436 210 L 76 210 Z" fill="#2d2d44"/>
+    <!-- Cute stars on top banner -->
+    <circle cx="120" cy="185" r="7" fill="#ffeb3b"/>
+    <circle cx="256" cy="185" r="9" fill="#00e5ff"/>
+    <circle cx="392" cy="185" r="7" fill="#ff4081"/>
+
+    <!-- White Piano Keys (Rainbow colors for kids!) -->
+    <!-- C (Dó) -->
+    <rect x="88" y="210" width="44" height="150" rx="8" fill="#ff4757"/>
+    <!-- D (Ré) -->
+    <rect x="136" y="210" width="44" height="150" rx="8" fill="#ffa502"/>
+    <!-- E (Mi) -->
+    <rect x="184" y="210" width="44" height="150" rx="8" fill="#2ed573"/>
+    <!-- F (Fá) -->
+    <rect x="232" y="210" width="44" height="150" rx="8" fill="#1e90ff"/>
+    <!-- G (Sol) -->
+    <rect x="280" y="210" width="44" height="150" rx="8" fill="#9b59b6"/>
+    <!-- A (Lá) -->
+    <rect x="328" y="210" width="44" height="150" rx="8" fill="#e056fd"/>
+    <!-- B (Si) -->
+    <rect x="376" y="210" width="44" height="150" rx="8" fill="#ff6b81"/>
+
+    <!-- Inner highlights on white keys -->
+    <rect x="92" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="140" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="188" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="236" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="284" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="332" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+    <rect x="380" y="214" width="36" height="138" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+
+    <!-- Black Keys -->
+    <!-- C# -->
+    <rect x="122" y="210" width="24" height="92" rx="5" fill="#11111a"/>
+    <!-- D# -->
+    <rect x="170" y="210" width="24" height="92" rx="5" fill="#11111a"/>
+    <!-- F# -->
+    <rect x="266" y="210" width="24" height="92" rx="5" fill="#11111a"/>
+    <!-- G# -->
+    <rect x="314" y="210" width="24" height="92" rx="5" fill="#11111a"/>
+    <!-- A# -->
+    <rect x="362" y="210" width="24" height="92" rx="5" fill="#11111a"/>
+
+    <rect x="124" y="212" width="20" height="84" rx="3" fill="#2d3436"/>
+    <rect x="172" y="212" width="20" height="84" rx="3" fill="#2d3436"/>
+    <rect x="268" y="212" width="20" height="84" rx="3" fill="#2d3436"/>
+    <rect x="316" y="212" width="20" height="84" rx="3" fill="#2d3436"/>
+    <rect x="364" y="212" width="20" height="84" rx="3" fill="#2d3436"/>
+  </g>
+
+  <!-- Musical Notes Floating -->
+  <g fill="url(#goldGrad)" filter="url(#shadow)">
+    <!-- Note 1 -->
+    <path d="M 140 120 C 140 100, 155 85, 175 80 L 175 60 C 175 55, 180 50, 185 52 L 225 65 C 230 67, 235 72, 235 77 L 235 110 C 235 125, 220 135, 205 135 C 190 135, 180 125, 180 115 C 180 105, 190 95, 205 95 L 215 95 L 215 80 L 175 70 L 175 120 C 175 135, 160 145, 145 145 C 130 145, 120 135, 120 125 C 120 115, 130 105, 145 105 L 155 105 L 155 120 Z"/>
+    
+    <!-- Sparkle Stars -->
+    <polygon points="370,95 376,108 390,110 380,120 382,135 370,127 358,135 360,120 350,110 364,108"/>
+    <polygon points="100,290 103,298 112,300 105,306 107,315 100,310 93,315 95,306 88,300 97,298" fill="#fff"/>
+    <polygon points="430,290 433,298 442,300 435,306 437,315 430,310 423,315 425,306 418,300 427,298" fill="#fff"/>
+  </g>
+</svg>

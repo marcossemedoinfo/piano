@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Piano Mágico Kids - Jogo de Piano Educativo</title>
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="description" content="Jogo de piano educativo infantil com todas as notas musicais e notas menores. Rápido, colorido e intuitivo para Android e iPhone.">
+  <meta name="theme-color" content="#2c0b4d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Piano Kids">
+
+  <!-- Ícones PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Canvas para partículas e estrelas interativas -->
+  <canvas id="particleCanvas"></canvas>
+
+  <div class="app-container">
+    <!-- Barra Superior de Controle e Ferramentas -->
+    <header class="top-bar">
+      <div class="logo-area">
+        <span class="logo-icon">🎹</span>
+        <div class="logo-text">
+          <h1>Piano Mágico</h1>
+          <span class="subtitle">Kids</span>
+        </div>
+      </div>
+
+      <!-- Seleção de Instrumentos Infantis -->
+      <div class="instrument-selector" title="Escolha o som do instrumento">
+        <button class="inst-btn active" data-instrument="piano">
+          <span class="inst-emoji">🎹</span>
+          <span class="inst-name">Piano</span>
+        </button>
+        <button class="inst-btn" data-instrument="xylophone">
+          <span class="inst-emoji">🔔</span>
+          <span class="inst-name">Xilofone</span>
+        </button>
+        <button class="inst-btn" data-instrument="musicbox">
+          <span class="inst-emoji">✨</span>
+          <span class="inst-name">Mágico</span>
+        </button>
+        <button class="inst-btn" data-instrument="meow">
+          <span class="inst-emoji">🐱</span>
+          <span class="inst-name">Gatinho</span>
+        </button>
+      </div>
+
+      <!-- Ações: Volume, Tela Cheia e Atalho no Celular -->
+      <div class="header-actions">
+        <!-- Controle de Volume -->
+        <div class="volume-control">
+          <button id="muteBtn" class="action-btn" title="Ativar/Desativar som">🔊</button>
+          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.85" aria-label="Volume">
+        </div>
+
+        <!-- Botão Alternar Efeitos Visuais / Estrelas -->
+        <button id="toggleFxBtn" class="action-btn active" title="Ligar/Desligar Estrelinhas">✨</button>
+
+        <!-- Botão Tela Cheia -->
+        <button id="fullscreenBtn" class="action-btn" title="Tela Cheia">⛶</button>
+
+        <!-- Botão de Instalar Atalho no Celular -->
+        <button id="installAppBtn" class="install-pwa-btn">
+          <span class="btn-icon">📲</span>
+          <span class="btn-text">Instalar no Celular</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Barra de Modos de Aprendizado -->
+    <nav class="mode-tabs">
+      <button class="tab-btn active" data-tab="piano-view">
+        <span class="tab-icon">🎹</span>
+        <span class="tab-label">Teclas Principais</span>
+      </button>
+      <button class="tab-btn" data-tab="minor-view">
+        <span class="tab-icon">🌟</span>
+        <span class="tab-label">Notas Menores</span>
+      </button>
+      <button class="tab-btn" data-tab="songs-view">
+        <span class="tab-icon">🎵</span>
+        <span class="tab-label">Músicas para Aprender</span>
+      </button>
+    </nav>
+
+    <!-- Mensagem de Orientação / Dica para Crianças -->
+    <div id="instructionBanner" class="instruction-banner">
+      <span class="banner-emoji">👆</span>
+      <span class="banner-text">Toque nas teclas coloridas para fazer música mágica!</span>
+    </div>
+
+    <!-- PAINEL: MÚSICAS PARA APRENDER (Opcional - Ativado via Tab) -->
+    <section id="songsSection" class="content-panel hidden">
+      <div class="song-cards-container">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+      <div id="songGuideBar" class="song-guide-bar hidden">
+        <div class="song-guide-info">
+          <span id="currentSongName" class="guide-title">Música</span>
+          <span id="songProgressText" class="guide-progress">0/0</span>
+        </div>
+        <div class="guide-controls">
+          <button id="playSongDemoBtn" class="guide-btn demo-btn">▶ Ouvir Sozinho</button>
+          <button id="stopSongBtn" class="guide-btn stop-btn">✕ Fechar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAINEL: NOTAS MENORES (DÓ MENOR, RÉ MENOR, ETC.) -->
+    <section id="minorChordsSection" class="content-panel">
+      <div class="section-title-wrap">
+        <h2>🌈 Notas e Acordes Menores</h2>
+        <p>Toque em cada botão para ouvir o acorde menor e ver as teclas brilharem no piano!</p>
+      </div>
+
+      <div class="minor-cards-grid">
+        <!-- DÓ MENOR -->
+        <button class="minor-chord-card chord-cm" data-chord="Cm" style="--card-color: #ff4757;">
+          <div class="card-mascot">🦁</div>
+          <div class="card-name">DÓ MENOR</div>
+          <div class="card-symbol">Cm</div>
+          <div class="card-notes">Dó • Ré# • Sol</div>
+        </button>
+
+        <!-- RÉ MENOR -->
+        <button class="minor-chord-card chord-dm" data-chord="Dm" style="--card-color: #ffa502;">
+          <div class="card-mascot">🐼</div>
+          <div class="card-name">RÉ MENOR</div>
+          <div class="card-symbol">Dm</div>
+          <div class="card-notes">Ré • Fá • Lá</div>
+        </button>
+
+        <!-- MI MENOR -->
+        <button class="minor-chord-card chord-em" data-chord="Em" style="--card-color: #2ed573;">
+          <div class="card-mascot">🐸</div>
+          <div class="card-name">MI MENOR</div>
+          <div class="card-symbol">Em</div>
+          <div class="card-notes">Mi • Sol • Si</div>
+        </button>
+
+        <!-- FÁ MENOR -->
+        <button class="minor-chord-card chord-fm" data-chord="Fm" style="--card-color: #00cec9;">
+          <div class="card-mascot">🐬</div>
+          <div class="card-name">FÁ MENOR</div>
+          <div class="card-symbol">Fm</div>
+          <div class="card-notes">Fá • Sol# • Dó</div>
+        </button>
+
+        <!-- SOL MENOR -->
+        <button class="minor-chord-card chord-gm" data-chord="Gm" style="--card-color: #1e90ff;">
+          <div class="card-mascot">🦊</div>
+          <div class="card-name">SOL MENOR</div>
+          <div class="card-symbol">Gm</div>
+          <div class="card-notes">Sol • Lá# • Ré</div>
+        </button>
+
+        <!-- LÁ MENOR -->
+        <button class="minor-chord-card chord-am" data-chord="Am" style="--card-color: #9b59b6;">
+          <div class="card-mascot">🐰</div>
+          <div class="card-name">LÁ MENOR</div>
+          <div class="card-symbol">Am</div>
+          <div class="card-notes">Lá • Dó • Mi</div>
+        </button>
+
+        <!-- SI MENOR -->
+        <button class="minor-chord-card chord-bm" data-chord="Bm" style="--card-color: #e056fd;">
+          <div class="card-mascot">🦄</div>
+          <div class="card-name">SI MENOR</div>
+          <div class="card-symbol">Bm</div>
+          <div class="card-notes">Si • Ré • Fá#</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- TECLADO DO PIANO (COMPLETO COM TECLAS BRANCAS E PRETAS) -->
+    <section class="piano-stage">
+      <div class="piano-frame">
+        <!-- Friso superior de madeira do piano -->
+        <div class="piano-top-edge">
+          <div class="wood-glow"></div>
+          <div class="edge-decorations">
+            <span>✨</span>
+            <span class="piano-brand">♪ PIANO KIDS ♪</span>
+            <span>⭐</span>
+          </div>
+        </div>
+
+        <!-- Teclado com teclas brancas e sobreposição de teclas pretas -->
+        <div id="pianoKeyboard" class="keyboard-keys" touch-action="none">
+          <!-- TECLAS BRANCAS (NATURAIS) -->
+          <div class="white-key-group">
+            <!-- DÓ (C4) -->
+            <button class="key key-white key-c4" data-note="C4" data-solfege="DÓ" data-color="#ff4757">
+              <span class="key-inner">
+                <span class="key-mascot">🍎</span>
+                <span class="key-name">DÓ</span>
+                <span class="key-sub">C</span>
+              </span>
+            </button>
+
+            <!-- RÉ (D4) -->
+            <button class="key key-white key-d4" data-note="D4" data-solfege="RÉ" data-color="#ffa502">
+              <span class="key-inner">
+                <span class="key-mascot">🍊</span>
+                <span class="key-name">RÉ</span>
+                <span class="key-sub">D</span>
+              </span>
+            </button>
+
+            <!-- MI (E4) -->
+            <button class="key key-white key-e4" data-note="E4" data-solfege="MI" data-color="#2ed573">
+              <span class="key-inner">
+                <span class="key-mascot">🍋</span>
+                <span class="key-name">MI</span>
+                <span class="key-sub">E</span>
+              </span>
+            </button>
+
+            <!-- FÁ (F4) -->
+            <button class="key key-white key-f4" data-note="F4" data-solfege="FÁ" data-color="#00cec9">
+              <span class="key-inner">
+                <span class="key-mascot">🍉</span>
+                <span class="key-name">FÁ</span>
+                <span class="key-sub">F</span>
+              </span>
+            </button>
+
+            <!-- SOL (G4) -->
+            <button class="key key-white key-g4" data-note="G4" data-solfege="SOL" data-color="#1e90ff">
+              <span class="key-inner">
+                <span class="key-mascot">🍇</span>
+                <span class="key-name">SOL</span>
+                <span class="key-sub">G</span>
+              </span>
+            </button>
+
+            <!-- LÁ (A4) -->
+            <button class="key key-white key-a4" data-note="A4" data-solfege="LÁ" data-color="#9b59b6">
+              <span class="key-inner">
+                <span class="key-mascot">🫐</span>
+                <span class="key-name">LÁ</span>
+                <span class="key-sub">A</span>
+              </span>
+            </button>
+
+            <!-- SI (B4) -->
+            <button class="key key-white key-b4" data-note="B4" data-solfege="SI" data-color="#e056fd">
+              <span class="key-inner">
+                <span class="key-mascot">🍓</span>
+                <span class="key-name">SI</span>
+                <span class="key-sub">B</span>
+              </span>
+            </button>
+
+            <!-- DÓ AGUDO (C5) -->
+            <button class="key key-white key-c5" data-note="C5" data-solfege="DÓ" data-color="#ff6b81">
+              <span class="key-inner">
+                <span class="key-mascot">🍒</span>
+                <span class="key-name">DÓ</span>
+                <span class="key-sub">C5</span>
+              </span>
+            </button>
+          </div>
+
+          <!-- TECLAS PRETAS (SUSTENIDOS / BEMÓIS) -->
+          <div class="black-key-group">
+            <!-- DÓ# / RÉb -->
+            <button class="key key-black key-cs4" data-note="C#4" data-solfege="DÓ#" data-slot="0">
+              <span class="black-inner">
+                <span class="black-name">DÓ#</span>
+                <span class="black-sub">C#</span>
+              </span>
+            </button>
+
+            <!-- RÉ# / MIb -->
+            <button class="key key-black key-ds4" data-note="D#4" data-solfege="RÉ#" data-slot="1">
+              <span class="black-inner">
+                <span class="black-name">RÉ#</span>
+                <span class="black-sub">D#</span>
+              </span>
+            </button>
+
+            <!-- ESPAÇO ENTRE MI E FÁ (sem tecla preta) -->
+
+            <!-- FÁ# / SOLb -->
+            <button class="key key-black key-fs4" data-note="F#4" data-solfege="FÁ#" data-slot="3">
+              <span class="black-inner">
+                <span class="black-name">FÁ#</span>
+                <span class="black-sub">F#</span>
+              </span>
+            </button>
+
+            <!-- SOL# / LÁb -->
+            <button class="key key-black key-gs4" data-note="G#4" data-solfege="SOL#" data-slot="4">
+              <span class="black-inner">
+                <span class="black-name">SOL#</span>
+                <span class="black-sub">G#</span>
+              </span>
+            </button>
+
+            <!-- LÁ# / SIb -->
+            <button class="key key-black key-as4" data-note="A#4" data-solfege="LÁ#" data-slot="5">
+              <span class="black-inner">
+                <span class="black-name">LÁ#</span>
+                <span class="black-sub">A#</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- MODAL DE INSTALAÇÃO NO CELULAR (PWA - IPHONE E ANDROID) -->
+  <div id="installModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <button id="closeInstallModal" class="modal-close-btn" title="Fechar">&times;</button>
+      
+      <div class="modal-header">
+        <div class="modal-app-icon">🎹</div>
+        <h2>Instalar Atalho no Celular</h2>
+        <p>Jogue em tela cheia como um aplicativo de verdade, sem internet!</p>
+      </div>
+
+      <!-- Guia especial para iPhone (Safari iOS) -->
+      <div id="iosInstallGuide" class="install-guide hidden">
+        <div class="guide-step">
+          <span class="step-num">1</span>
+          <p>No navegador Safari, toque no botão <strong>Compartilhar</strong> <span class="ios-icon">⎋</span> (na barra inferior).</p>
+        </div>
+        <div class="guide-step">
+          <span class="step-num">2</span>
+          <p>Role as opções para cima e toque em <strong>"Adicionar à Tela de Início"</strong> <span class="ios-icon">➕</span>.</p>
+        </div>
+        <div class="guide-step">
+          <span class="step-num">3</span>
+          <p>Toque em <strong>"Adicionar"</strong> no canto superior direito. Pronto!</p>
+        </div>
+      </div>
+
+      <!-- Botão para Android / Chrome -->
+      <div id="androidInstallGuide" class="install-guide">
+        <p class="install-prompt-msg">Clique no botão abaixo para adicionar o ícone do Piano à sua tela inicial:</p>
+        <button id="confirmInstallBtn" class="confirm-install-btn">
+          <span>📲</span> Adicionar à Tela Inicial
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PARABÉNS (Quando termina uma música) -->
+  <div id="congratsModal" class="modal-backdrop hidden">
+    <div class="modal-card congrats-card">
+      <div class="congrats-stars">⭐⭐⭐</div>
+      <h2 id="congratsTitle">Parabéns! 🎉</h2>
+      <p id="congratsMessage">Você tocou a música todinha! Você é um verdadeiro pianista!</p>
+      <button id="congratsCloseBtn" class="confirm-install-btn">Tocar Outra! 🎶</button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="audio.js"></script>
+  <script src="particles.js"></script>
+  <script src="songs.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
