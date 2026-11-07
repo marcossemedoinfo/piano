@@ -1,4 +1,4 @@
-const CACHE_NAME = 'piano-kids-v3';
+const CACHE_NAME = 'piano-kids-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -36,27 +36,28 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Estratégia Stale-While-Revalidate: responde rápido pelo cache e atualiza em segundo plano
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        // Cache new static files if request is valid
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => null);
+
+        return cachedResponse || fetchPromise.then((res) => {
+          if (res) return res;
+          if (event.request.mode === 'navigate') {
+            return cache.match('./index.html');
+          }
         });
-        return networkResponse;
-      }).catch(() => {
-        // Fallback for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
       });
     })
   );

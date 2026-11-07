@@ -1,6 +1,6 @@
 /**
  * Piano Kids - Aplicação Principal e Interações
- * Suporte a Android, iPhone (PWA), Multitouch, Sons Fiéis e Modo Infantil.
+ * Suporte a Android, iPhone (PWA), Multitouch, Glissando, Sons Fiéis e Modo Infantil.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,10 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Elementos do DOM
   const pianoKeyboard = document.getElementById('pianoKeyboard');
+  const minorCardsGrid = document.querySelector('.minor-cards-grid');
   const allKeys = document.querySelectorAll('.key');
   const minorCards = document.querySelectorAll('.minor-chord-card');
   const instrumentBtns = document.querySelectorAll('.inst-btn');
   const modeTabs = document.querySelectorAll('.tab-btn');
+  const instructionBanner = document.getElementById('instructionBanner');
+  const bannerEmoji = instructionBanner ? instructionBanner.querySelector('.banner-emoji') : null;
+  const bannerText = instructionBanner ? instructionBanner.querySelector('.banner-text') : null;
   const songsSection = document.getElementById('songsSection');
   const minorChordsSection = document.getElementById('minorChordsSection');
   const songCardsContainer = document.querySelector('.song-cards-container');
@@ -46,15 +50,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (note) keyElementMap[note] = k;
   });
 
+  // Atualiza a mensagem educativa no banner superior
+  function updateBanner(emoji, text) {
+    if (bannerEmoji) bannerEmoji.textContent = emoji;
+    if (bannerText) bannerText.textContent = text;
+  }
+
   /* ==========================================================================
      1. SISTEMA DE TOQUE E SOM DAS TECLAS (MULTITOUCH & GLISSANDO / ARRASTAR)
      ========================================================================== */
 
-  // Mapa de ponteiros ativos (permite deslizar e usar vários dedos simultaneamente)
+  // Mapa de ponteiros ativos (pointerId -> elemento .key ou .minor-chord-card)
   const activePointers = new Map();
 
   // Toca uma nota específica com animação visual e partículas
-  function triggerKey(keyEl, x = null, y = null) {
+  function triggerKey(keyEl, x = null, y = null, autoReleaseMs = 0) {
     if (!keyEl) return;
     const note = keyEl.dataset.note;
     if (!note) return;
@@ -67,13 +77,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Efeito tátil (vibração no celular se suportado)
     if (navigator.vibrate) {
-      try { navigator.vibrate(18); } catch (e) {}
+      try { navigator.vibrate(15); } catch (e) {}
     }
 
     // Animação visual da tecla afundando
     keyEl.classList.add('active');
+    if (autoReleaseMs > 0) {
+      setTimeout(() => {
+        keyEl.classList.remove('active');
+      }, autoReleaseMs);
+    }
 
-    // Explosão de estrelas e notas musicais coloridas
+    // Mostra no banner qual nota foi tocada
+    const solfege = keyEl.dataset.solfege || note;
+    const mascotEl = keyEl.querySelector('.key-mascot');
+    const emoji = mascotEl ? mascotEl.textContent : '🎵';
+    if (!songGuide.currentSong) {
+      updateBanner(emoji, `Tocando nota: ${solfege} (${note.replace('4', '')})`);
+    }
+
+    // Explosão de estrelas leves e coloridas
     const rect = keyEl.getBoundingClientRect();
     const spawnX = x !== null ? x : rect.left + rect.width / 2;
     const spawnY = y !== null ? y : rect.top + rect.height * 0.7;
@@ -84,32 +107,73 @@ document.addEventListener('DOMContentLoaded', () => {
     songGuide.onUserPlayedNote(note);
   }
 
-  // Detecta qual tecla do piano está sob as coordenadas (x, y) do toque ou mouse
-  function getKeyFromCoords(x, y) {
+  // Toca um acorde menor e ilumina as 3 teclas correspondentes no piano
+  function triggerMinorChordCard(card, x = null, y = null) {
+    if (!card) return;
+    const chordId = card.dataset.chord;
+    if (!chordId) return;
+
+    audio.init();
+    const chord = audio.playMinorChord(chordId, true);
+
+    if (navigator.vibrate) {
+      try { navigator.vibrate(25); } catch (e) {}
+    }
+
+    card.classList.add('active');
+    setTimeout(() => card.classList.remove('active'), 320);
+
+    const mascotEl = card.querySelector('.card-mascot');
+    const emoji = mascotEl ? mascotEl.textContent : '🌈';
+    if (chord && !songGuide.currentSong) {
+      updateBanner(emoji, `Acorde ${chord.name} (${chord.label}): ${chord.notesText}`);
+    }
+
+    const rect = card.getBoundingClientRect();
+    particles.spawn(x || (rect.left + rect.width / 2), y || (rect.top + rect.height / 2), '#ff007f');
+
+    // Ilumina no piano todas as 3 teclas que formam o acorde menor
+    const keysToLight = (chord && chord.visualKeys) ? chord.visualKeys : (chord ? chord.notes : []);
+    keysToLight.forEach((noteName, idx) => {
+      const keyEl = keyElementMap[noteName];
+      if (keyEl) {
+        setTimeout(() => {
+          keyEl.classList.add('active');
+          setTimeout(() => keyEl.classList.remove('active'), 280);
+        }, idx * 35);
+      }
+    });
+  }
+
+  // Detecta qual tecla (.key) ou card menor (.minor-chord-card) está sob o dedo
+  function getInteractiveTargetFromCoords(x, y) {
     if (typeof x !== 'number' || typeof y !== 'number') return null;
     const el = document.elementFromPoint(x, y);
-    return el ? el.closest('.key') : null;
+    if (!el) return null;
+    return el.closest('.key, .minor-chord-card');
   }
 
   function handlePointerStart(e) {
-    // Se for mouse, aceita apenas clique com botão principal (esquerdo)
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
-    // Libera a captura de ponteiro para que o navegador permita arrastar entre teclas no celular
+    // Libera captura de ponteiro para permitir arrastar livremente entre teclas e acordes
     if (e.target && e.target.releasePointerCapture) {
       try { e.target.releasePointerCapture(e.pointerId); } catch (err) {}
     }
 
-    const keyEl = getKeyFromCoords(e.clientX, e.clientY);
-    if (keyEl) {
+    const targetEl = getInteractiveTargetFromCoords(e.clientX, e.clientY);
+    if (targetEl) {
       e.preventDefault();
-      activePointers.set(e.pointerId, keyEl);
-      triggerKey(keyEl, e.clientX, e.clientY);
+      activePointers.set(e.pointerId, targetEl);
+      if (targetEl.classList.contains('key')) {
+        triggerKey(targetEl, e.clientX, e.clientY);
+      } else if (targetEl.classList.contains('minor-chord-card')) {
+        triggerMinorChordCard(targetEl, e.clientX, e.clientY);
+      }
     }
   }
 
   function handlePointerMove(e) {
-    // Se for mouse sem nenhum botão pressionado, desativa
     if (e.pointerType === 'mouse' && e.buttons === 0) {
       if (activePointers.has(e.pointerId)) {
         const prev = activePointers.get(e.pointerId);
@@ -119,21 +183,24 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Se este dedo/mouse não começou no teclado ou não está ativo, ignora
     if (!activePointers.has(e.pointerId) && e.buttons === 0) return;
 
-    const currentKey = getKeyFromCoords(e.clientX, e.clientY);
-    const prevKey = activePointers.get(e.pointerId);
+    const currentTarget = getInteractiveTargetFromCoords(e.clientX, e.clientY);
+    const prevTarget = activePointers.get(e.pointerId);
 
-    // Se deslizou para uma tecla diferente (Glissando)
-    if (currentKey !== prevKey) {
-      if (prevKey) {
-        prevKey.classList.remove('active');
+    // Se deslizou para outra tecla ou outro card de acorde (Glissando)
+    if (currentTarget !== prevTarget) {
+      if (prevTarget) {
+        prevTarget.classList.remove('active');
       }
 
-      if (currentKey) {
-        activePointers.set(e.pointerId, currentKey);
-        triggerKey(currentKey, e.clientX, e.clientY);
+      if (currentTarget) {
+        activePointers.set(e.pointerId, currentTarget);
+        if (currentTarget.classList.contains('key')) {
+          triggerKey(currentTarget, e.clientX, e.clientY);
+        } else if (currentTarget.classList.contains('minor-chord-card')) {
+          triggerMinorChordCard(currentTarget, e.clientX, e.clientY);
+        }
       } else {
         activePointers.delete(e.pointerId);
       }
@@ -141,13 +208,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handlePointerEnd(e) {
-    const prevKey = activePointers.get(e.pointerId);
-    if (prevKey) {
+    const prevTarget = activePointers.get(e.pointerId);
+    if (prevTarget) {
       setTimeout(() => {
-        prevKey.classList.remove('active');
-      }, 100);
+        prevTarget.classList.remove('active');
+      }, 90);
       activePointers.delete(e.pointerId);
     }
+  }
+
+  function releaseAllActiveKeys() {
+    activePointers.clear();
+    allKeys.forEach(k => k.classList.remove('active'));
+    minorCards.forEach(c => c.classList.remove('active'));
   }
 
   // Configura a cor individual de cada tecla
@@ -158,58 +231,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Eventos de Toque e Deslizamento contínuo (Glissando)
+  // Eventos de Toque e Deslizamento contínuo (Glissando no Teclado e nas Notas Menores)
   if (pianoKeyboard) {
     pianoKeyboard.addEventListener('pointerdown', handlePointerStart, { passive: false });
+  }
+  if (minorCardsGrid) {
+    minorCardsGrid.addEventListener('pointerdown', handlePointerStart, { passive: false });
   }
   window.addEventListener('pointermove', handlePointerMove, { passive: false });
   window.addEventListener('pointerup', handlePointerEnd, { passive: true });
   window.addEventListener('pointercancel', handlePointerEnd, { passive: true });
-
-  /* ==========================================================================
-     2. NOTAS E ACORDES MENORES (DÓ MENOR, RÉ MENOR, ETC.)
-     ========================================================================== */
-
-  minorCards.forEach(card => {
-    const chordId = card.dataset.chord;
-
-    card.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      audio.init();
-
-      // Toca o acorde menor com arpejo realista
-      const chord = audio.playMinorChord(chordId, true);
-
-      // Vibração no celular
-      if (navigator.vibrate) {
-        try { navigator.vibrate(30); } catch (e) {}
-      }
-
-      // Animação visual no card do acorde menor
-      card.classList.add('active');
-      setTimeout(() => card.classList.remove('active'), 350);
-
-      // Partículas coloridas leves apenas no card clicado
-      const rect = card.getBoundingClientRect();
-      particles.spawn(e.clientX || (rect.left + rect.width / 2), e.clientY || (rect.top + rect.height / 2), '#ff007f');
-
-      // Ilumina simultaneamente no piano as teclas que compõem o acorde menor (sem spawn excessivo)
-      if (chord && chord.notes) {
-        chord.notes.forEach((noteName, idx) => {
-          const keyEl = keyElementMap[noteName];
-          if (keyEl) {
-            setTimeout(() => {
-              keyEl.classList.add('active');
-              setTimeout(() => keyEl.classList.remove('active'), 250);
-            }, idx * 45);
-          }
-        });
-      }
-    });
+  window.addEventListener('blur', releaseAllActiveKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllActiveKeys();
   });
 
   /* ==========================================================================
-     3. TECLADO DO COMPUTADOR (ACESSIBILIDADE / PC)
+     2. TECLADO DO COMPUTADOR (ACESSIBILIDADE / PC)
      ========================================================================== */
   const keyboardMapping = {
     // Teclas Brancas
@@ -233,29 +271,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const chordId = action.split(':')[1];
       const card = document.querySelector(`.minor-chord-card[data-chord="${chordId}"]`);
       if (card) {
-        card.dispatchEvent(new Event('pointerdown'));
+        triggerMinorChordCard(card);
       }
     } else {
       const keyEl = keyElementMap[action];
-      if (keyEl && !activeKeysPressed.has(e.key)) {
-        activeKeysPressed.add(e.key);
+      if (keyEl && !activeKeysPressed.has(e.key.toLowerCase())) {
+        activeKeysPressed.add(e.key.toLowerCase());
         triggerKey(keyEl);
       }
     }
   });
 
   window.addEventListener('keyup', (e) => {
-    activeKeysPressed.delete(e.key);
+    const lowerKey = e.key.toLowerCase();
+    activeKeysPressed.delete(lowerKey);
+    const action = keyboardMapping[e.key];
+    if (action && !action.startsWith('chord:')) {
+      const keyEl = keyElementMap[action];
+      if (keyEl) keyEl.classList.remove('active');
+    }
   });
 
   /* ==========================================================================
-     4. MODO CANÇÕES INFANTIS E GUIA INTERATIVO
+     3. MODO CANÇÕES INFANTIS E GUIA INTERATIVO
      ========================================================================== */
 
   const songGuide = new SongGuide(
     // Callback de iluminação da tecla guia
     (noteName, label, index, total) => {
-      // Remove destaque anterior
       allKeys.forEach(k => k.classList.remove('guide-highlight'));
 
       if (!noteName) return;
@@ -268,12 +311,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (songProgressText) {
         songProgressText.textContent = `${index + 1} / ${total} (Toque: ${label})`;
       }
+      updateBanner('🌟', `Siga a tecla iluminada: toque em ${label}! (${index + 1}/${total})`);
     },
-    // Callback quando a canção é concluída
+    // Callback quando a canção é concluída pela criança
     (completedSong) => {
       if (congratsModal) {
         congratsModal.classList.remove('hidden');
-        // Efeito comemorativo leve
         for (let i = 0; i < 6; i++) {
           particles.spawn(
             window.innerWidth * (0.3 + Math.random() * 0.4),
@@ -286,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Renderiza cards de músicas disponíveis
   function renderSongCards() {
+    if (!songCardsContainer) return;
     songCardsContainer.innerHTML = '';
     KIDS_SONGS.forEach(song => {
       const card = document.createElement('div');
@@ -303,30 +347,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function updateDemoButtonState(isPlaying) {
+    if (!playSongDemoBtn) return;
+    if (isPlaying) {
+      playSongDemoBtn.textContent = '⏹ Parar Demo';
+    } else {
+      playSongDemoBtn.textContent = '▶ Ouvir Sozinho';
+    }
+  }
+
   function startSongPractice(songId) {
     const song = KIDS_SONGS.find(s => s.id === songId);
     if (!song) return;
 
     songGuideBar.classList.remove('hidden');
     currentSongName.textContent = `${song.icon} ${song.name}`;
+    updateDemoButtonState(false);
     songGuide.startSong(songId);
   }
 
   if (playSongDemoBtn) {
     playSongDemoBtn.addEventListener('click', () => {
       if (!songGuide.currentSong) return;
-      songGuide.playDemo(songGuide.currentSong.id, (note, label) => {
-        const keyEl = keyElementMap[note];
-        if (keyEl) triggerKey(keyEl);
-      });
+      songGuide.playDemo(
+        songGuide.currentSong.id,
+        (note) => {
+          const keyEl = keyElementMap[note];
+          if (keyEl) triggerKey(keyEl, null, null, 220);
+        },
+        (isPlaying) => {
+          updateDemoButtonState(isPlaying);
+        }
+      );
     });
   }
 
   if (stopSongBtn) {
     stopSongBtn.addEventListener('click', () => {
       songGuide.stopSong();
+      updateDemoButtonState(false);
       songGuideBar.classList.add('hidden');
       document.querySelectorAll('.song-card').forEach(c => c.classList.remove('selected'));
+      updateBanner('👆', 'Escolha uma música acima ou toque livremente nas teclas!');
     });
   }
 
@@ -339,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSongCards();
 
   /* ==========================================================================
-     5. ABAS DE NAVEGAÇÃO E VISUALIZAÇÃO
+     4. ABAS DE NAVEGAÇÃO E VISUALIZAÇÃO
      ========================================================================== */
 
   modeTabs.forEach(tab => {
@@ -351,20 +413,28 @@ document.addEventListener('DOMContentLoaded', () => {
       if (target === 'piano-view') {
         songsSection.classList.add('hidden');
         minorChordsSection.classList.remove('hidden');
-      } else if (target === 'minor-view') {
+        if (pianoKeyboard) pianoKeyboard.classList.remove('giant-mode');
+        songGuide.stopSong();
+        songGuideBar.classList.add('hidden');
+        updateBanner('👆', 'Toque ou deslize o dedo pelas teclas e notas menores!');
+      } else if (target === 'big-keys-view') {
         songsSection.classList.add('hidden');
-        minorChordsSection.classList.remove('hidden');
-        // Rola suavemente até o bloco de acordes
-        minorChordsSection.scrollIntoView({ behavior: 'smooth' });
+        minorChordsSection.classList.add('hidden');
+        if (pianoKeyboard) pianoKeyboard.classList.add('giant-mode');
+        songGuide.stopSong();
+        songGuideBar.classList.add('hidden');
+        updateBanner('🎹', 'Modo Teclado Gigante: deslize os dedos pelas teclas!');
       } else if (target === 'songs-view') {
         minorChordsSection.classList.add('hidden');
         songsSection.classList.remove('hidden');
+        if (pianoKeyboard) pianoKeyboard.classList.remove('giant-mode');
+        updateBanner('🎵', 'Toque em uma música abaixo para aprender passo a passo!');
       }
     });
   });
 
   /* ==========================================================================
-     6. INSTRUMENTOS E VOLUME
+     5. INSTRUMENTOS E VOLUME
      ========================================================================== */
 
   instrumentBtns.forEach(btn => {
@@ -411,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ==========================================================================
-     7. EFEITOS VISUAIS E TELA CHEIA
+     6. EFEITOS VISUAIS E TELA CHEIA
      ========================================================================== */
 
   if (toggleFxBtn) {
@@ -443,35 +513,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ==========================================================================
-     8. PWA: INSTALAÇÃO E ATALHO NO CELULAR (IPHONE & ANDROID)
+     7. PWA: INSTALAÇÃO E ATALHO NO CELULAR (IPHONE & ANDROID)
      ========================================================================== */
 
-  // Detecção de plataforma iOS (iPhone / iPad)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
-  // Se já estiver rodando instalado em tela cheia, esconde o botão de instalar
   if (isStandalone && installAppBtn) {
     installAppBtn.style.display = 'none';
   }
 
-  // Captura o evento nativo de instalação do Android / Chrome
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
     if (installAppBtn) installAppBtn.style.display = 'flex';
   });
 
-  // Clique no botão "Instalar no Celular"
   if (installAppBtn) {
     installAppBtn.addEventListener('click', () => {
       if (isIOS) {
-        // Mostra o guia ilustrado com os 3 passos para iPhone/Safari
         iosInstallGuide.classList.remove('hidden');
         androidInstallGuide.classList.add('hidden');
         installModal.classList.remove('hidden');
       } else if (deferredInstallPrompt) {
-        // Android nativo: abre o prompt do sistema direto
         deferredInstallPrompt.prompt();
         deferredInstallPrompt.userChoice.then((choiceResult) => {
           if (choiceResult.outcome === 'accepted') {
@@ -480,7 +544,6 @@ document.addEventListener('DOMContentLoaded', () => {
           deferredInstallPrompt = null;
         });
       } else {
-        // Fallback genérico para navegadores que suportam PWA manual
         iosInstallGuide.classList.add('hidden');
         androidInstallGuide.classList.remove('hidden');
         installModal.classList.remove('hidden');
@@ -509,12 +572,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Registra o Service Worker para cache e uso offline total
+  // Registra o Service Worker para cache e atualização inteligente
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
         .then(reg => {
-          console.log('Piano Kids PWA pronto e registrado com sucesso!', reg.scope);
+          reg.update();
         })
         .catch(err => {
           console.warn('Registro de Service Worker falhou:', err);

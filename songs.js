@@ -20,6 +20,28 @@ const KIDS_SONGS = [
     ]
   },
   {
+    id: 'cai-cai-balao',
+    name: 'Cai, Cai, Balão',
+    icon: '🎈',
+    notes: [
+      { note: 'G4', label: 'SOL' }, { note: 'G4', label: 'SOL' },
+      { note: 'F4', label: 'FÁ' }, { note: 'E4', label: 'MI', duration: 1.2 },
+      { note: 'G4', label: 'SOL' }, { note: 'G4', label: 'SOL' },
+      { note: 'F4', label: 'FÁ' }, { note: 'E4', label: 'MI', duration: 1.2 },
+      { note: 'G4', label: 'SOL' }, { note: 'A4', label: 'LÁ' },
+      { note: 'G4', label: 'SOL' }, { note: 'F4', label: 'FÁ' },
+      { note: 'E4', label: 'MI' }, { note: 'D4', label: 'RÉ', duration: 1.5 },
+      { note: 'D4', label: 'RÉ' }, { note: 'E4', label: 'MI' },
+      { note: 'F4', label: 'FÁ' }, { note: 'D4', label: 'RÉ' },
+      { note: 'E4', label: 'MI' }, { note: 'F4', label: 'FÁ' },
+      { note: 'G4', label: 'SOL', duration: 1.4 },
+      { note: 'G4', label: 'SOL' }, { note: 'A4', label: 'LÁ' },
+      { note: 'G4', label: 'SOL' }, { note: 'F4', label: 'FÁ' },
+      { note: 'E4', label: 'MI' }, { note: 'D4', label: 'RÉ' },
+      { note: 'C4', label: 'DÓ', duration: 2.0 }
+    ]
+  },
+  {
     id: 'parabens',
     name: 'Parabéns Pra Você',
     icon: '🎂',
@@ -91,9 +113,14 @@ class SongGuide {
   }
 
   highlightCurrentStep() {
-    if (!this.currentSong || this.currentIndex >= this.currentSong.notes.length) {
-      if (this.onSongComplete) this.onSongComplete(this.currentSong);
-      this.stopSong();
+    if (!this.currentSong) return;
+
+    if (this.currentIndex >= this.currentSong.notes.length) {
+      const completed = this.currentSong;
+      // Reinicia para o começo da música para que a criança possa tocar de novo se quiser
+      this.currentIndex = 0;
+      this.highlightCurrentStep();
+      if (this.onSongComplete) this.onSongComplete(completed);
       return;
     }
 
@@ -115,25 +142,43 @@ class SongGuide {
     return false;
   }
 
-  playDemo(songId, onPlayStep) {
-    this.stopSong();
+  playDemo(songId, onPlayStep, onDemoStateChange) {
+    // Se já estiver tocando a demo, para a demonstração e volta para o modo prática
+    if (this.isPlayingDemo) {
+      this.stopDemo();
+      if (onDemoStateChange) onDemoStateChange(false);
+      this.highlightCurrentStep();
+      return;
+    }
+
     const song = KIDS_SONGS.find(s => s.id === songId);
     if (!song) return;
 
+    this.stopDemo();
     this.isPlayingDemo = true;
     this.currentSong = song;
-    let accumulatedTime = 100;
+    if (onDemoStateChange) onDemoStateChange(true);
+
+    let accumulatedTime = 80;
 
     song.notes.forEach((step, index) => {
-      const stepDuration = (step.duration || 0.6) * 650;
+      const stepDuration = (step.duration || 0.6) * 580;
       const tid = setTimeout(() => {
         if (!this.isPlayingDemo) return;
+        this.currentIndex = index;
+        if (this.onKeyHighlight) {
+          this.onKeyHighlight(step.note, step.label, index, song.notes.length);
+        }
         if (onPlayStep) onPlayStep(step.note, step.label);
+
         if (index === song.notes.length - 1) {
-          setTimeout(() => {
-            if (this.onSongComplete) this.onSongComplete(song);
-            this.stopSong();
-          }, 800);
+          const endTid = setTimeout(() => {
+            this.isPlayingDemo = false;
+            this.currentIndex = 0;
+            if (onDemoStateChange) onDemoStateChange(false);
+            this.highlightCurrentStep();
+          }, 700);
+          this.demoTimeouts.push(endTid);
         }
       }, accumulatedTime);
 

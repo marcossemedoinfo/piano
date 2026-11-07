@@ -296,6 +296,7 @@ html, body {
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
   margin-bottom: 16px;
+  touch-action: none;
 }
 
 .minor-chord-card {
@@ -310,10 +311,15 @@ html, body {
   gap: 4px;
   cursor: pointer;
   color: #fff;
+  touch-action: none;
   transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
+}
+
+.minor-chord-card * {
+  pointer-events: none;
 }
 
 .minor-chord-card::before {
@@ -503,6 +509,11 @@ html, body {
   height: 240px;
   user-select: none;
   touch-action: none;
+  transition: height 0.25s ease;
+}
+
+.keyboard-keys.giant-mode {
+  height: 360px;
 }
 
 /* Grupo de Teclas Brancas */
@@ -877,6 +888,10 @@ html, body {
     height: 190px;
   }
 
+  .keyboard-keys.giant-mode {
+    height: 320px;
+  }
+
   .key-mascot {
     font-size: 1.2rem;
   }
@@ -932,6 +947,10 @@ html, body {
 
   .keyboard-keys {
     height: 160px;
+  }
+
+  .keyboard-keys.giant-mode {
+    height: 230px;
   }
 
   .piano-top-edge {

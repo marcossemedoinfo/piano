@@ -1,6 +1,6 @@
 /**
  * Piano Kids - Audio Engine Ultra Otimizado (Web Audio API)
- * Síntese acústica fiel, com baixíssimo consumo de CPU para celulares.
+ * Síntese acústica fiel, controle de polifonia (voice limiting) e desbloqueio iOS/Android.
  */
 
 class SoundEngine {
@@ -10,6 +10,9 @@ class SoundEngine {
     this.compressor = null;
     this.currentInstrument = 'piano'; // 'piano', 'xylophone', 'musicbox', 'meow'
     this.volume = 0.85;
+    this.activeVoices = [];
+    this.maxPolyphony = 12; // Limite máximo de vozes simultâneas para nunca travar no glissando
+    this.unlocked = false;
 
     // Frequências fiéis padrão de afinação ocidental (A4 = 440Hz)
     this.frequencies = {
@@ -39,45 +42,105 @@ class SoundEngine {
       'C6': 1046.50
     };
 
-    // Definição de Acordes Menores (Notas que compõem cada acorde)
+    // Definição de Acordes Menores (Notas sonoras e teclas visuais correspondentes no teclado)
     this.minorChords = {
-      'Cm': { name: 'DÓ MENOR', notes: ['C4', 'D#4', 'G4'], label: 'Cm' },
-      'Dm': { name: 'RÉ MENOR', notes: ['D4', 'F4', 'A4'], label: 'Dm' },
-      'Em': { name: 'MI MENOR', notes: ['E4', 'G4', 'B4'], label: 'Em' },
-      'Fm': { name: 'FÁ MENOR', notes: ['F4', 'G#4', 'C5'], label: 'Fm' },
-      'Gm': { name: 'SOL MENOR', notes: ['G4', 'A#4', 'D5'], label: 'Gm' },
-      'Am': { name: 'LÁ MENOR', notes: ['A4', 'C5', 'E5'], label: 'Am' },
-      'Bm': { name: 'SI MENOR', notes: ['B4', 'D5', 'F#5'], label: 'Bm' }
+      'Cm': { name: 'DÓ MENOR', notes: ['C4', 'D#4', 'G4'], visualKeys: ['C4', 'D#4', 'G4'], label: 'Cm', notesText: 'Dó + Ré# + Sol' },
+      'Dm': { name: 'RÉ MENOR', notes: ['D4', 'F4', 'A4'], visualKeys: ['D4', 'F4', 'A4'], label: 'Dm', notesText: 'Ré + Fá + Lá' },
+      'Em': { name: 'MI MENOR', notes: ['E4', 'G4', 'B4'], visualKeys: ['E4', 'G4', 'B4'], label: 'Em', notesText: 'Mi + Sol + Si' },
+      'Fm': { name: 'FÁ MENOR', notes: ['F4', 'G#4', 'C5'], visualKeys: ['F4', 'G#4', 'C5'], label: 'Fm', notesText: 'Fá + Sol# + Dó' },
+      'Gm': { name: 'SOL MENOR', notes: ['G4', 'A#4', 'D5'], visualKeys: ['G4', 'A#4', 'D4'], label: 'Gm', notesText: 'Sol + Lá# + Ré' },
+      'Am': { name: 'LÁ MENOR', notes: ['A4', 'C5', 'E5'], visualKeys: ['A4', 'C5', 'E4'], label: 'Am', notesText: 'Lá + Dó + Mi' },
+      'Bm': { name: 'SI MENOR', notes: ['B4', 'D5', 'F#5'], visualKeys: ['B4', 'D4', 'F#4'], label: 'Bm', notesText: 'Si + Ré + Fá#' }
     };
   }
 
-  // Inicializa o contexto de áudio de forma leve e segura
+  // Inicializa e desbloqueia o contexto de áudio (compatível com iOS Safari e Android Chrome)
   init() {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
-      }
-      return;
+    if (!this.ctx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContextClass();
+
+      // Compressor dinâmico leve para evitar estalos quando várias notas tocam juntas
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.setValueAtTime(-12, this.ctx.currentTime);
+      this.compressor.ratio.setValueAtTime(3, this.ctx.currentTime);
+
+      // Controle de Volume Master
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+
+      this.masterGain.connect(this.compressor);
+      this.compressor.connect(this.ctx.destination);
     }
 
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AudioContextClass();
+    // No iOS, o estado pode ficar 'suspended' ou 'interrupted' ao minimizar o app
+    if (this.ctx.state !== 'running') {
+      this.ctx.resume().catch(() => {});
+    }
 
-    // Compressor dinâmico leve para evitar estalos
-    this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-12, this.ctx.currentTime);
-    this.compressor.ratio.setValueAtTime(3, this.ctx.currentTime);
+    // Desbloqueio silencioso no primeiro toque para iOS Safari
+    if (!this.unlocked && this.ctx) {
+      try {
+        const buffer = this.ctx.createBuffer(1, 1, 22050);
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.ctx.destination);
+        source.start(0);
+        this.unlocked = true;
+      } catch (e) {}
+    }
+  }
 
-    // Controle de Volume Master
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+  // Registra uma voz ativa e descarta a mais antiga se ultrapassar o limite de polifonia
+  registerVoice(gainNode, oscillators, duration) {
+    const now = this.ctx.currentTime;
 
-    this.masterGain.connect(this.compressor);
-    this.compressor.connect(this.ctx.destination);
+    // Se exceder o limite de vozes simultâneas, encerra a mais antiga suavemente
+    while (this.activeVoices.length >= this.maxPolyphony) {
+      const oldest = this.activeVoices.shift();
+      this.stopVoiceQuickly(oldest);
+    }
+
+    const voice = { gainNode, oscillators, stopped: false };
+    this.activeVoices.push(voice);
+
+    // Limpeza automática após o término natural da nota
+    setTimeout(() => {
+      this.cleanupVoice(voice);
+    }, duration * 1000 + 80);
+  }
+
+  stopVoiceQuickly(voice) {
+    if (!voice || voice.stopped || !this.ctx) return;
+    voice.stopped = true;
+    try {
+      const now = this.ctx.currentTime;
+      voice.gainNode.gain.cancelScheduledValues(now);
+      voice.gainNode.gain.setValueAtTime(Math.max(0.0001, voice.gainNode.gain.value), now);
+      voice.gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.025);
+      setTimeout(() => this.cleanupVoice(voice), 35);
+    } catch (e) {
+      this.cleanupVoice(voice);
+    }
+  }
+
+  cleanupVoice(voice) {
+    if (!voice) return;
+    voice.stopped = true;
+    const idx = this.activeVoices.indexOf(voice);
+    if (idx !== -1) this.activeVoices.splice(idx, 1);
+
+    try {
+      voice.oscillators.forEach(osc => {
+        try { osc.stop(); } catch (e) {}
+        try { osc.disconnect(); } catch (e) {}
+      });
+      voice.gainNode.disconnect();
+    } catch (e) {}
   }
 
   // Toca uma nota individual
-  playNote(noteName, duration = 1.8) {
+  playNote(noteName, duration = 1.6) {
     this.init();
     const freq = this.frequencies[noteName];
     if (!freq) return;
@@ -99,30 +162,30 @@ class SoundEngine {
     }
   }
 
-  // Síntese de Piano Acústico otimizada (Apenas 2 osciladores leves)
-  synthPiano(freq, duration = 1.8) {
+  // Síntese de Piano Acústico otimizada (2 osciladores leves)
+  synthPiano(freq, duration = 1.6) {
     const now = this.ctx.currentTime;
     const gainNode = this.ctx.createGain();
 
     // Envelope percussivo de piano acústico: ataque instantâneo e decaimento gradual
     gainNode.gain.setValueAtTime(0.001, now);
     gainNode.gain.exponentialRampToValueAtTime(0.85, now + 0.012);
-    gainNode.gain.exponentialRampToValueAtTime(0.35, now + 0.15);
+    gainNode.gain.exponentialRampToValueAtTime(0.35, now + 0.14);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-    // Oscilador 1: Corpo da corda acústica (Triangular - rico em harmônicos ímpares)
+    // Oscilador 1: Corpo da corda acústica
     const osc1 = this.ctx.createOscillator();
     osc1.type = 'triangle';
     osc1.frequency.setValueAtTime(freq, now);
 
-    // Oscilador 2: Harmônico superior suave para dar o timbre do piano de cauda
+    // Oscilador 2: Harmônico superior suave para dar o timbre do piano
     const osc2 = this.ctx.createOscillator();
     osc2.type = 'sine';
     osc2.frequency.setValueAtTime(freq * 2, now);
 
     const osc2Gain = this.ctx.createGain();
-    osc2Gain.gain.setValueAtTime(0.3, now);
-    osc2Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6); // Harmônico decai rápido
+    osc2Gain.gain.setValueAtTime(0.28, now);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
 
     osc1.connect(gainNode);
     osc2.connect(osc2Gain);
@@ -134,19 +197,11 @@ class SoundEngine {
     osc1.stop(now + duration);
     osc2.stop(now + duration);
 
-    // Desconecta nós ao final para liberar memória (garbage collection)
-    setTimeout(() => {
-      try {
-        osc1.disconnect();
-        osc2.disconnect();
-        osc2Gain.disconnect();
-        gainNode.disconnect();
-      } catch (e) {}
-    }, duration * 1000 + 100);
+    this.registerVoice(gainNode, [osc1, osc2, osc2Gain], duration);
   }
 
   // Síntese de Xilofone infantil ultra rápida
-  synthXylophone(freq, duration = 1.2) {
+  synthXylophone(freq, duration = 1.1) {
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -163,19 +218,17 @@ class SoundEngine {
     osc.start(now);
     osc.stop(now + duration);
 
-    setTimeout(() => {
-      try { osc.disconnect(); gain.disconnect(); } catch (e) {}
-    }, duration * 1000 + 50);
+    this.registerVoice(gain, [osc], duration);
   }
 
   // Síntese de Caixinha de Música
-  synthMusicBox(freq, duration = 1.5) {
+  synthMusicBox(freq, duration = 1.4) {
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq * 2, now); // Oitavado brilhante
+    osc.frequency.setValueAtTime(freq * 2, now);
 
     gain.gain.setValueAtTime(0.65, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
@@ -186,9 +239,7 @@ class SoundEngine {
     osc.start(now);
     osc.stop(now + duration);
 
-    setTimeout(() => {
-      try { osc.disconnect(); gain.disconnect(); } catch (e) {}
-    }, duration * 1000 + 50);
+    this.registerVoice(gain, [osc], duration);
   }
 
   // Síntese fofa de Gatinho
@@ -212,9 +263,7 @@ class SoundEngine {
     osc.start(now);
     osc.stop(now + duration);
 
-    setTimeout(() => {
-      try { osc.disconnect(); gain.disconnect(); } catch (e) {}
-    }, duration * 1000 + 50);
+    this.registerVoice(gain, [osc], duration);
   }
 
   // Toca um Acorde Menor completo de forma rápida e harmônica
@@ -226,7 +275,7 @@ class SoundEngine {
     chord.notes.forEach((note, index) => {
       const delay = arpeggiated ? index * 0.035 : 0;
       setTimeout(() => {
-        this.playNote(note, 2.0);
+        this.playNote(note, 1.8);
       }, delay * 1000);
     });
 
