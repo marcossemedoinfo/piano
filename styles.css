@@ -528,6 +528,7 @@ html, body {
   justify-content: flex-end;
   align-items: center;
   padding-bottom: 12px;
+  touch-action: none;
   transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
   z-index: 1;
 }
@@ -612,6 +613,7 @@ html, body {
 .key-black {
   position: absolute;
   pointer-events: auto;
+  touch-action: none;
   width: 7.2%;
   height: 100%;
   background: linear-gradient(180deg, #2f3542 0%, #151820 70%, #0d0f14 100%);

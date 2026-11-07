@@ -47,8 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ==========================================================================
-     1. SISTEMA DE TOQUE E SOM DAS TECLAS (MULTITOUCH PARA CELULAR)
+     1. SISTEMA DE TOQUE E SOM DAS TECLAS (MULTITOUCH & GLISSANDO / ARRASTAR)
      ========================================================================== */
+
+  // Mapa de ponteiros ativos (permite deslizar e usar vários dedos simultaneamente)
+  const activePointers = new Map();
 
   // Toca uma nota específica com animação visual e partículas
   function triggerKey(keyEl, x = null, y = null) {
@@ -69,9 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Animação visual da tecla afundando
     keyEl.classList.add('active');
-    setTimeout(() => {
-      keyEl.classList.remove('active');
-    }, 220);
 
     // Explosão de estrelas e notas musicais coloridas
     const rect = keyEl.getBoundingClientRect();
@@ -84,20 +84,87 @@ document.addEventListener('DOMContentLoaded', () => {
     songGuide.onUserPlayedNote(note);
   }
 
-  // Tratamento de eventos de toque e ponteiro com suporte a multitouch real
+  // Detecta qual tecla do piano está sob as coordenadas (x, y) do toque ou mouse
+  function getKeyFromCoords(x, y) {
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    const el = document.elementFromPoint(x, y);
+    return el ? el.closest('.key') : null;
+  }
+
+  function handlePointerStart(e) {
+    // Se for mouse, aceita apenas clique com botão principal (esquerdo)
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // Libera a captura de ponteiro para que o navegador permita arrastar entre teclas no celular
+    if (e.target && e.target.releasePointerCapture) {
+      try { e.target.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+
+    const keyEl = getKeyFromCoords(e.clientX, e.clientY);
+    if (keyEl) {
+      e.preventDefault();
+      activePointers.set(e.pointerId, keyEl);
+      triggerKey(keyEl, e.clientX, e.clientY);
+    }
+  }
+
+  function handlePointerMove(e) {
+    // Se for mouse sem nenhum botão pressionado, desativa
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      if (activePointers.has(e.pointerId)) {
+        const prev = activePointers.get(e.pointerId);
+        if (prev) prev.classList.remove('active');
+        activePointers.delete(e.pointerId);
+      }
+      return;
+    }
+
+    // Se este dedo/mouse não começou no teclado ou não está ativo, ignora
+    if (!activePointers.has(e.pointerId) && e.buttons === 0) return;
+
+    const currentKey = getKeyFromCoords(e.clientX, e.clientY);
+    const prevKey = activePointers.get(e.pointerId);
+
+    // Se deslizou para uma tecla diferente (Glissando)
+    if (currentKey !== prevKey) {
+      if (prevKey) {
+        prevKey.classList.remove('active');
+      }
+
+      if (currentKey) {
+        activePointers.set(e.pointerId, currentKey);
+        triggerKey(currentKey, e.clientX, e.clientY);
+      } else {
+        activePointers.delete(e.pointerId);
+      }
+    }
+  }
+
+  function handlePointerEnd(e) {
+    const prevKey = activePointers.get(e.pointerId);
+    if (prevKey) {
+      setTimeout(() => {
+        prevKey.classList.remove('active');
+      }, 100);
+      activePointers.delete(e.pointerId);
+    }
+  }
+
+  // Configura a cor individual de cada tecla
   allKeys.forEach(key => {
-    // Configura a cor da tecla no CSS
     const color = key.dataset.color;
     if (color) {
       key.style.setProperty('--key-color', color);
     }
-
-    // Eventos Pointer (unifica Mouse e Touch moderno)
-    key.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      triggerKey(key, e.clientX, e.clientY);
-    });
   });
+
+  // Eventos de Toque e Deslizamento contínuo (Glissando)
+  if (pianoKeyboard) {
+    pianoKeyboard.addEventListener('pointerdown', handlePointerStart, { passive: false });
+  }
+  window.addEventListener('pointermove', handlePointerMove, { passive: false });
+  window.addEventListener('pointerup', handlePointerEnd, { passive: true });
+  window.addEventListener('pointercancel', handlePointerEnd, { passive: true });
 
   /* ==========================================================================
      2. NOTAS E ACORDES MENORES (DÓ MENOR, RÉ MENOR, ETC.)

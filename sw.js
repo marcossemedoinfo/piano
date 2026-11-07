@@ -1,4 +1,4 @@
-const CACHE_NAME = 'piano-kids-v2';
+const CACHE_NAME = 'piano-kids-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
